@@ -6,8 +6,7 @@
 #include <stdexcept>
 #include <streambuf>
 #define QOI_IMPLEMENTATION
-#include "qoipp/qoi_debugging.h"
-#define QOIPP_FORCE_RGB
+#include "qoi_debugging.h"
 #include "qoipp.hpp"
 
 using uchar = unsigned char;
@@ -47,6 +46,8 @@ auto cqoi() {
   qoi_desc desc;
   auto pixels =
       reinterpret_cast<qoipp::rgb *>(qoi_read(test_filename, &desc, 0));
+  if (!pixels)
+    throw std::runtime_error("file not found");
   std::vector<qoipp::rgb> results;
   size_t length = desc.height * desc.width;
   results.reserve(length);
@@ -62,7 +63,7 @@ auto coipp() {
   std::vector<qoipp::rgb> results;
   auto length = image.header.height * image.header.width;
   results.reserve(length);
-  std::copy_n(image.read_pixels(), length, std::back_inserter(results));
+  std::copy_n(image.read(), length, std::back_inserter(results));
   return results;
 }
 auto find_errors(auto &a, auto &b) {

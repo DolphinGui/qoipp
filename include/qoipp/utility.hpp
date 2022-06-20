@@ -12,6 +12,8 @@
 #endif
 #endif
 namespace qoipp {
+using uint = unsigned int;
+
 #ifndef __cpp_lib_byte
 enum struct byte : unsigned char {};
 #else
@@ -45,7 +47,24 @@ union pixel {
   rgba rgba;
   operator struct rgb() { return rgb; }
   operator struct rgba() { return rgba; }
+  inline pixel &operator=(struct rgb p) noexcept {
+    rgb = p;
+    return *this;
+  }
+  inline pixel &operator=(struct rgba p) noexcept {
+    rgba = p;
+    return *this;
+  }
 };
+// compares a and b as rgba if has_alpha is true, or as rgb otherwise.
+inline bool pixel_compare(pixel a, pixel b, bool has_alpha) {
+  // tested it, and this is a little premature. GCC and clang
+  // compiles a naive version that branches which performs about
+  // the same as this.
+  a.rgba.a *= has_alpha;
+  b.rgba.b *= has_alpha;
+  return a.rgba == b.rgba;
+}
 inline std::ostream &operator<<(std::ostream &out, rgba in) {
   out << "r: " << uint(in.r) << " g: " << uint(in.g) << " b: " << uint(in.b);
   return out;
@@ -63,11 +82,17 @@ constexpr inline char qoitag[4] = {'q', 'o', 'i', 'f'};
   intentional due to the binary layout of it. */
 struct rgb_d {
   const char tag = rgb_tag;
-  uchar r, g, b;
+  rgb px;
+  rgb_d(rgb px) : px(px) {}
+  rgb_d(rgb_d &&px) = default;
+  rgb_d(const rgb_d &px) = default;
 };
 struct rgba_d {
   const char tag = rgba_tag;
-  uchar r, g, b, a;
+  rgba px;
+  rgba_d(rgba px) : px(px) {}
+  rgba_d(rgba_d &&px) = default;
+  rgba_d(const rgba_d &px) = default;
 };
 struct index_d {
   uchar index : 6;
@@ -76,18 +101,50 @@ struct index_d {
   index_d(index_d &&) = default;
   index_d(const index_d &) = default;
 };
-struct diff_d {
+class diff_d {
   uchar db : 2, dg : 2, dr : 2;
   char tag : 2;
-  diff_d(char dr, char dg, char db) : tag(0b01), dr(dr), dg(dg), db(db) {}
+
+public:
+  // I normally dislike accessor methods but since all of the structs
+  // represent binary representation to actually access them properly
+  // requires this
+  inline uchar getdr() const noexcept { return dr - 2; }
+  inline uchar getdg() const noexcept { return dg - 2; }
+  inline uchar getdb() const noexcept { return db - 2; }
+  diff_d(char dr, char dg, char db)
+      : tag(0b01), dr(dr + 2), dg(dg + 2), db(db + 2) {}
   diff_d() = default;
   diff_d(diff_d &&) = default;
   diff_d(const diff_d &) = default;
 };
-struct luma_d {
+template <typename Diff> rgba operator+(rgba p, Diff d) noexcept {
+  return rgba{static_cast<unsigned char>(p.r + d.getdr()),
+              static_cast<unsigned char>(p.g + d.getdg()),
+              static_cast<unsigned char>(p.b + d.getdb()), p.a};
+}
+template <typename Diff> rgba operator+(Diff d, rgba p) noexcept {
+  return p + d;
+}
+template <typename Diff> rgb operator+(rgb p, Diff d) noexcept {
+  return rgb{static_cast<unsigned char>(p.r + d.getdr()),
+             static_cast<unsigned char>(p.g + d.getdg()),
+             static_cast<unsigned char>(p.b + d.getdb())};
+}
+template <typename Diff> rgb operator+(Diff d, rgb p) noexcept { return p + d; }
+class luma_d {
   uchar dg : 6;
-  const char tag : 2;
-  uchar b : 4, r : 4;
+  const unsigned char tag : 2;
+  uchar db : 4, dr : 4;
+
+public:
+  inline uchar getdr() const noexcept { return dg - 32 + dr - 8; }
+  inline uchar getdg() const noexcept { return dg - 32; }
+  inline uchar getdb() const noexcept { return dg - 32 + db - 8; }
+  luma_d(uchar dr, uchar dg, uchar db)
+      : dg(dg + 32), dr(dr - dg + 8), db(db - dg + 8), tag(0b10) {}
+  luma_d(luma_d &&) = default;
+  luma_d(const luma_d &) = default;
 };
 struct run_d {
   uchar length : 6;
