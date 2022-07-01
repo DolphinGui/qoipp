@@ -1,3 +1,3 @@
-This is a cpp streaming implementation of the qoi encoder.
+# QOIPP
 
-Currently reading is the only thing that works right now.
+This is my implementation of the QOI decoded in c++.
